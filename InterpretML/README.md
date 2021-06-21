@@ -23,3 +23,16 @@ pip install tensorflow
 pip install xgboost
 ```
 
+## 文件说明：
+
+- IoU.py为使用的类似交并比的评估指标
+
+- 不同算法尝试：
+
+  - LIME.ipynb
+
+  - SHAP.ipynb
+
+  - EBMBoost.ipynb
+
+    
