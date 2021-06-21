@@ -3,3 +3,11 @@
 
 ![img](https://pic4.zhimg.com/80/v2-7eb530d9cf3eff736b713af9340377d3_720w.jpg)
 
+## 文件信息：
+
+- evaluate.py保存了用于评估解释效果的函数，目前有3个
+  - IoU（自己设计的）
+  - faithfulness_metric
+  - monotonicity_metric
+- Evaluating Metricx为评估解释效果函数的简单用法
+
