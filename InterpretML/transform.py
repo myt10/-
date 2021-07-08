@@ -32,8 +32,8 @@ class lime_transformed(LimeTabular):
         cnt = 0
         for name in name_list:
             if name != '':
-                print("name: ",name)
-                print(self.feature_names.index(raw_list[cnt]))
+                #print("name: ",name)
+                #print(self.feature_names.index(raw_list[cnt]))
                 self.feature_names[self.feature_names.index(raw_list[cnt])] = name
             cnt += 1
         #print(self.feature_names)
