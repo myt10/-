@@ -1,4 +1,4 @@
-season:季节 (1：winter, 2：pring, 3：summer, 4：fall)
+season:季节 (1：winter, 2：spring, 3：summer, 4：fall)
 yr:年份 (0：2011, 1：2012)
 mnth:月份 ( 1 to 12)
 hr:时刻（小时） (0 to 23)
