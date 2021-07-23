@@ -1,0 +1,15 @@
+season:季节 (1：winter, 2：spring, 3：summer, 4：fall)
+yr:年份 (0：2011, 1：2012)
+mnth:月份 ( 1 to 12)
+hr:时刻（小时） (0 to 23)
+holiday:是否是节假日（0 不是， 1 是）
+weekday:星期几
+workingday:是否为工作日（1是，0不是）
+weathersit:气候（1,2,3,4天气依次变差）
+temp:以摄氏度为单位的标准化温度。
+atemp:以摄氏度为单位的标准化体感温度。
+hum:归一化湿度。这些值被分为 100（最大值）
+windspeed:归一化风速。值分为 67（最大值）
+casual:休闲用户数
+registered:注册用户数
+cnt:包括休闲和注册在内的总租赁自行车数
