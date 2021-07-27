@@ -44,6 +44,7 @@ import pandas as pd
 import numpy as np
 import xgboost
 from interpret.glassbox import ExplainableBoostingClassifier
+'''
 plt.rcParams['font.sans-serif'] = ['KaiTi'] # 指定默认字体
 plt.rcParams['axes.unicode_minus'] = False # 解决保存图像是负号'-'显示为方块的问题
 pd.options.display.max_columns = None
@@ -112,7 +113,10 @@ class LimeTabular_Multi(LimeTabularExplainer):
         while(self.index <self.dataset.shape[0]):
             self.explain_multi(n_jobs=n_jobs,predict_fn=predict_fn)
 
+'''
 
+#下面的是运行的，上面的是一些尝试
+##########################################################
 df = pd.read_csv("../train/true_dataset/lending club/lending_club_processed.csv",index_col=0)
 df.drop(columns="target",inplace=True)
 target_list = ["loan_amnt","int_rate","emp_length","grade","home_ownership","total_bc_limit","installment"]
@@ -135,31 +139,32 @@ X,y = df.iloc[:,:-1],df.iloc[:,-1]
 X_train,X_test,y_train,y_test = train_test_split(X,y,test_size=0.3,random_state=42)
 xgb_clf = xgboost.XGBClassifier(use_label_encoder=False,eval_metric=['logloss','auc','error'])
 xgb_clf.fit(X_train,y_train)
-#lime_explainer = LimeTabular_Multi(X_train.values,feature_names=X_train.columns,discretize_continuous=True,discretizer="quartile",verbose=True,mode = "classification")
-#lime_explainer.explain_dataset(X_train,10,xgb_clf.predict_proba)
 
-#exp_list = [None for _ in range(X_test.shape[0])]
-#exp_list = [None for _ in range(15)]
+
 process_list = []
 n_jobs = 10
-def explain(index_num,X_train,X_test,predict_fn,exp_list):
+
+
+#上面都是处理数据的代码
+###################################################################
+def explain(index_num,X_train,X_test,predict_fn,exp_list):    #这里是解释的函数
     limeexplainer = LimeTabularExplainer(X_train.values, feature_names=X_train.columns, discretize_continuous=True,
                                          discretizer="quartile", verbose=True, mode="classification")
     exp = limeexplainer.explain_instance(X_test.iloc[index_num], predict_fn, num_features=10)
     exp_list[index_num] = exp
     #print(exp_list[index_num].local_exp[1])
-    print(exp_list)
-    #print("index_num: "+str(index_num))
+    #print(exp_list)
+    print("index_num: "+str(index_num))
 if __name__ == '__main__':
-    n_jobs = input("进程数： ")
-    index = 0
+    n_jobs = int(input("进程数： "))
+    index = 0   #使用index来防止进程先后关系导致解释先后顺序发生颠倒
     manager = Manager()
-    exp_list = manager.list()
-    for i in range(X_test.shape[0]):
+    exp_list = manager.list()   #这里使用multiprocessing中的list来管理,这样就能通过explain函数来改变列表
+    for i in range(X_test.shape[0]): #创建和测试集行数一样多的列表来保存解释结果
         exp_list.append(None)
     #while(index < X_test.shape[0]):
     while(True):
-        if len(process_list) ==0:
+        if len(process_list) ==0:   #第一回合先创建一个进程列表
             for i in range(n_jobs):
                 p = Process(target=explain,args=(index,X_train,X_test,xgb_clf.predict_proba,exp_list))
                 p.start()
@@ -168,7 +173,7 @@ if __name__ == '__main__':
                 #if index == X_test.shape[0]:
                 if index ==X_test.shape[0]:
                     break
-        else:
+        else:                   #后面的回合就一直更新进程列表
             for i in range(len(process_list)):
                 process_list[i] = Process(target=explain,args=(index,X_train,X_test,xgb_clf.predict_proba,exp_list))
                 process_list[i].start()
@@ -177,13 +182,13 @@ if __name__ == '__main__':
                 if index ==X_test.shape[0]:
                     break
         for i in process_list:
-            i.join()
+            i.join()   #每一次都解释n_jobs个数据行，在解释都结束后再进行下一个回合（这里就是服务器端卡住的地方）
         print("已处理 " + str(index) + " 行数据")
         if index == X_test.shape[0]:
             break
     target_list = ["loan_amnt", "int_rate", "emp_length", "grade", "home_ownership", "total_bc_limit", "installment"]
     #print(exp_list[0].local_exp[1])
-
+    #下面是提取解释结果来定性评估一下
     def compare(target_list, list_10):
         set_result = set(target_list) & set(list_10)
         return len(set_result)
@@ -195,7 +200,6 @@ if __name__ == '__main__':
         return result_list
     count = 0
     for i in range(X_test.shape[0]):
-    #for i in range(15):
         exp = exp_list[i]
         result_list = extract_from_exp(exp, X_train.columns)
         count += compare(target_list, result_list)
