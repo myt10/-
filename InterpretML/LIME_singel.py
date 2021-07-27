@@ -117,9 +117,7 @@ class LimeTabular_Multi(LimeTabularExplainer):
 import pickle
 #下面的是运行的，上面的是一些尝试
 ##########################################################
-df = pd.read_csv("../train/true_dataset/lending club/lending_club_processed.csv",index_col=0)
-df.drop(columns="target",inplace=True)
-target_list = ["loan_amnt","int_rate","emp_length","grade","home_ownership","total_bc_limit","installment"]
+
 def compare(target_list,list_10):
     set_result = set(target_list) & set(list_10)
     return len(set_result)
@@ -131,24 +129,27 @@ def normalize(x):
     else:
         result = (x-x_min)/(x_max-x_min)
         return result
+def sigmoid(x):
+    return 1. / (1 + np.exp(-x))
+def tanh(x):
+    return 2*sigmoid(2*x)-1
+df = pd.read_csv("../train/true_dataset/lending club/lending_club_processed.csv",index_col=0)
+df.drop(columns="target",inplace=True)
+target_list = ["loan_amnt","int_rate","emp_length","sub_grade","mths_since_recent_inq","total_bc_limit","installment"]
 df_norm = df
-df_norm["target"] = 0.01 * df_norm["loan_amnt"] + 10 * df_norm["int_rate"]+ 5* df_norm["emp_length"]+2*df_norm["grade"]+10*df_norm["home_ownership"]+0.5*df_norm["installment"]+ 0.005*df_norm["total_bc_limit"]#-2*df_norm["mths_since_last_delinq"]#
-df_norm["target"] = (normalize(df_norm["target"])>0.4).astype(int)
+df_norm["target"] = np.sqrt(df_norm["loan_amnt"]) + 10 /(df_norm["int_rate"]+0.0001)+ df_norm["emp_length"]*df_norm["emp_length"]+4*df_norm["sub_grade"]+tanh(df_norm["mths_since_recent_inq"]+20*sigmoid(df_norm["total_bc_limit"])+(0.01*df_norm["installment"])**3)
+df_norm["target"] = (normalize(df_norm["target"])>0.5).astype(int)
 #df_norm["target"].value_counts()
 X,y = df.iloc[:,:-1],df.iloc[:,-1]
 X_train,X_test,y_train,y_test = train_test_split(X,y,test_size=0.3,random_state=42)
 xgb_clf = xgboost.XGBClassifier(use_label_encoder=False,eval_metric=['logloss','auc','error'])
 xgb_clf.fit(X_train,y_train)
-
-process_list = []
-n_jobs = 10
-
-
 #上面都是处理数据的代码
 ###################################################################
 def compare(target_list, list_10):
     set_result = set(target_list) & set(list_10)
     return len(set_result)
+
 
 def extract_from_exp(exp, columns):
     exp_local = exp.local_exp[1]
@@ -162,47 +163,27 @@ def explain(index_num,X_train,X_test,predict_fn,exp_list,target_list,count_list)
     exp = limeexplainer.explain_instance(X_test.iloc[index_num], predict_fn, num_features=10)
     exp_list[index_num] = exp
     count_list[index_num] = str(compare(extract_from_exp(exp, X_train.columns),target_list))+"\n"
-    if index_num % 500 ==0:
-        with open("result.txt","w") as file:
+    if index_num % 500 ==1:
+        with open("result_nonlinear.txt","w") as file:
                 file.writelines(count_list)
 
     #print(exp_list[index_num].local_exp[1])
     #print(exp_list)
     print("index_num: "+str(index_num))
 if __name__ == '__main__':
-
-    target_list = ["loan_amnt", "int_rate", "emp_length", "grade", "home_ownership", "total_bc_limit", "installment"]
-    n_jobs = int(input("进程数： "))
     index = 0   #使用index来防止进程先后关系导致解释先后顺序发生颠倒
-    manager = Manager()
-    exp_list = manager.list()   #这里使用multiprocessing中的list来管理,这样就能通过explain函数来改变列表
-    count_list = manager.list()
-    for i in range(int(X_test.shape[0]*0.3)): #创建和测试集行数一样多的列表来保存解释结果
+    exp_list = []
+    count_list = []
+    for i in range(int(X_train.shape[0]*0.5)):
         exp_list.append(None)
         count_list.append(str(-1))
     #while(index < X_test.shape[0]):
     while(True):
-        if len(process_list) ==0:   #第一回合先创建一个进程列表
-            for i in range(n_jobs):
-                p = Process(target=explain,args=(index,X_train,X_test,xgb_clf.predict_proba,exp_list,target_list,count_list))
-                p.start()
-                index += 1
-                process_list.append(p)
-                #if index == X_test.shape[0]:
-                if index ==int(X_test.shape[0]*0.3):
-                    break
-        else:                   #后面的回合就一直更新进程列表
-            for i in range(len(process_list)):
-                process_list[i] = Process(target=explain,args=(index,X_train,X_test,xgb_clf.predict_proba,exp_list,target_list,count_list))
-                process_list[i].start()
-                index += 1
-                #if index == X_test.shape[0]:
-                if index ==int(X_test.shape[0]*0.3):
-                    break
-        for i in process_list:
-            i.join()   #每一次都解释n_jobs个数据行，在解释都结束后再进行下一个回合（这里就是服务器端卡住的地方）
+        explain(index,X_train,X_test,xgb_clf.predict_proba,exp_list,target_list,count_list)
+        index += 1
+        #if index == X_test.shape[0]:
         print("已处理 " + str(index) + " 行数据")
-        if index == int(X_test.shape[0]*0.3):
+        if index ==int(X_test.shape[0]*0.3):
             break
 
     #print(exp_list[0].local_exp[1])
