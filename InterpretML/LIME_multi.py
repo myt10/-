@@ -117,31 +117,6 @@ class LimeTabular_Multi(LimeTabularExplainer):
 import pickle
 #下面的是运行的，上面的是一些尝试
 ##########################################################
-df = pd.read_csv("../train/true_dataset/lending club/lending_club_processed.csv",index_col=0)
-df.drop(columns="target",inplace=True)
-target_list = ["loan_amnt","int_rate","emp_length","grade","home_ownership","total_bc_limit","installment"]
-def compare(target_list,list_10):
-    set_result = set(target_list) & set(list_10)
-    return len(set_result)
-def normalize(x):
-    x_max = x.max()
-    x_min = x.min()
-    if x.max() == x.min():
-        return x
-    else:
-        result = (x-x_min)/(x_max-x_min)
-        return result
-df_norm = df
-df_norm["target"] = 0.01 * df_norm["loan_amnt"] + 10 * df_norm["int_rate"]+ 5* df_norm["emp_length"]+2*df_norm["grade"]+10*df_norm["home_ownership"]+0.5*df_norm["installment"]+ 0.005*df_norm["total_bc_limit"]#-2*df_norm["mths_since_last_delinq"]#
-df_norm["target"] = (normalize(df_norm["target"])>0.4).astype(int)
-#df_norm["target"].value_counts()
-X,y = df.iloc[:,:-1],df.iloc[:,-1]
-X_train,X_test,y_train,y_test = train_test_split(X,y,test_size=0.3,random_state=42)
-xgb_clf = xgboost.XGBClassifier(use_label_encoder=False,eval_metric=['logloss','auc','error'])
-xgb_clf.fit(X_train,y_train)
-
-process_list = []
-n_jobs = 10
 
 
 #上面都是处理数据的代码
@@ -168,16 +143,79 @@ def explain(index_num,X_train,X_test,predict_fn,exp_list,target_list,count_list)
 
     #print(exp_list[index_num].local_exp[1])
     #print(exp_list)
-    print("index_num: "+str(index_num))
-if __name__ == '__main__':
+    print("index_num: "+str(index_num)+" count: "+str(count_list[index_num]))
+def compare(target_list, list_10):
+    set_result = set(target_list) & set(list_10)
+    return len(set_result)
 
-    target_list = ["loan_amnt", "int_rate", "emp_length", "grade", "home_ownership", "total_bc_limit", "installment"]
+
+def normalize(x):
+    x_max = x.max()
+    x_min = x.min()
+    if x.max() == x.min():
+        return x
+    else:
+        result = (x - x_min) / (x_max - x_min)
+        return result
+def sigmoid(x):
+    return 1. / (1 + np.exp(-x))
+def tanh(x):
+    return 2*sigmoid(2*x)-1
+if __name__ == '__main__':
+    #target_list = ["loan_amnt", "annual_inc", "int_rate", "total_rec_prncp", "total_rec_int"]
+    #target_list = ["loan_amnt", "int_rate", "emp_length", "grade", "home_ownership", "total_bc_limit", "installment"]
+    df = pd.read_csv("../train/true_dataset/lending club/lending_club_processed.csv", index_col=0)
+    df.drop(columns="target", inplace=True)
+    #df_norm = (df - df.min()) / (df.max() - df.min())
+    df_norm = df
+    corre_matrix = df_norm.corr()
+    del_list = []
+    for i in range(corre_matrix.shape[0]):
+        for j in range(i + 1, corre_matrix.shape[0]):
+            if corre_matrix.iloc[i, j] > 0.8:
+                print(df_norm.columns[j], i, j)
+                if df_norm.columns[j] not in del_list:
+                    del_list.append(df_norm.columns[j])
+    corre_matrix = df_norm.corr()
+    del_list = []
+    for i in range(corre_matrix.shape[0]):
+        for j in range(i + 1, corre_matrix.shape[0]):
+            if corre_matrix.iloc[i, j] > 0.8:
+                print(df_norm.columns[j], i, j)
+                if df_norm.columns[j] not in del_list:
+                    del_list.append(df_norm.columns[j])
+    col_list = list(df.columns)
+    for i in del_list:
+        col_list.remove(i)
+    df_norm = df_norm[col_list]
+    df_norm = df
+    # df_norm["target"] = 0.01 * df_norm["loan_amnt"] + 10 * df_norm["int_rate"]+ 5* df_norm["emp_length"]+2*df_norm["grade"]+10*df_norm["home_ownership"]+0.5*df_norm["installment"]+ 0.005*df_norm["total_bc_limit"]#-2*df_norm["mths_since_last_delinq"]#
+    # df_norm["target"] = (normalize(df_norm["target"])>0.4).astype(int)
+    # df_norm["target"].value_counts()
+    target_list = ["loan_amnt", "annual_inc", "int_rate", "total_rec_int", "tot_coll_amt"]
+    df_norm["target"] = (df_norm["loan_amnt"] + 0.5 * df_norm["annual_inc"]).apply(np.log1p) + 0.0008 * df_norm[
+        "loan_amnt"] * df_norm["int_rate"] + np.sqrt(df_norm["total_rec_int"] + df_norm["tot_coll_amt"])
+    df_norm["target"] = (normalize(df_norm["target"]) > 0.4).astype(int)
+    df_norm["target"] = (normalize(df_norm["target"]) > 0.4).astype(int)
+    # df_norm["target"].value_counts()
+    X, y = df_norm.iloc[:, :-1], df_norm.iloc[:, -1]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    from imblearn.over_sampling import SMOTE
+
+    smo = SMOTE(random_state=42)
+    X_res, y_res = smo.fit_resample(X_train, y_train)
+    xgb_clf = xgboost.XGBClassifier(use_label_encoder=False, eval_metric=['logloss', 'auc', 'error'])
+    xgb_clf.fit(X_res, y_res)
+
+    process_list = []
+    n_jobs = 10
+    import catboost
     n_jobs = int(input("进程数： "))
     index = 0   #使用index来防止进程先后关系导致解释先后顺序发生颠倒
     manager = Manager()
     exp_list = manager.list()   #这里使用multiprocessing中的list来管理,这样就能通过explain函数来改变列表
     count_list = manager.list()
-    for i in range(int(X_test.shape[0]*0.3)): #创建和测试集行数一样多的列表来保存解释结果
+    for i in range(int(X_test.shape[0]*0.6)): #创建和测试集行数一样多的列表来保存解释结果
         exp_list.append(None)
         count_list.append(str(-1))
     #while(index < X_test.shape[0]):
@@ -189,7 +227,7 @@ if __name__ == '__main__':
                 index += 1
                 process_list.append(p)
                 #if index == X_test.shape[0]:
-                if index ==int(X_test.shape[0]*0.3):
+                if index ==int(X_test.shape[0]*0.6):
                     break
         else:                   #后面的回合就一直更新进程列表
             for i in range(len(process_list)):
@@ -197,21 +235,21 @@ if __name__ == '__main__':
                 process_list[i].start()
                 index += 1
                 #if index == X_test.shape[0]:
-                if index ==int(X_test.shape[0]*0.3):
+                if index ==int(X_test.shape[0]*0.6):
                     break
         for i in process_list:
             i.join()   #每一次都解释n_jobs个数据行，在解释都结束后再进行下一个回合（这里就是服务器端卡住的地方）
         print("已处理 " + str(index) + " 行数据")
-        if index == int(X_test.shape[0]*0.3):
+        if index == int(X_test.shape[0]*0.6):
             break
 
     #print(exp_list[0].local_exp[1])
     #下面是提取解释结果来定性评估一下
 
     count = 0
-    for i in range(int(X_test.shape[0]*0.3)):
+    for i in range(int(X_test.shape[0]*0.6)):
         exp = exp_list[i]
         result_list = extract_from_exp(exp, X_train.columns)
         count += compare(target_list, result_list)
-    count /= int(X_test.shape[0]*0.3)
+    count /= int(X_test.shape[0]*0.6)
     print(count)

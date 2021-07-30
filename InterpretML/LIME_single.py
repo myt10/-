@@ -137,8 +137,29 @@ df = pd.read_csv("../train/true_dataset/lending club/lending_club_processed.csv"
 df.drop(columns="target",inplace=True)
 target_list = ["loan_amnt","int_rate","emp_length","sub_grade","mths_since_recent_inq","total_bc_limit","installment"]
 df_norm = df
-df_norm["target"] = np.sqrt(df_norm["loan_amnt"]) + 10 /(df_norm["int_rate"]+0.0001)+ df_norm["emp_length"]*df_norm["emp_length"]+4*df_norm["sub_grade"]+tanh(df_norm["mths_since_recent_inq"]+20*sigmoid(df_norm["total_bc_limit"])+(0.01*df_norm["installment"])**3)
-df_norm["target"] = (normalize(df_norm["target"])>0.5).astype(int)
+corre_matrix = df_norm.corr()
+del_list = []
+for i in range(corre_matrix.shape[0]):
+    for j in range(i + 1, corre_matrix.shape[0]):
+        if corre_matrix.iloc[i, j] > 0.8:
+            print(df_norm.columns[j], i, j)
+            if df_norm.columns[j] not in del_list:
+                del_list.append(df_norm.columns[j])
+corre_matrix = df_norm.corr()
+del_list = []
+for i in range(corre_matrix.shape[0]):
+    for j in range(i + 1, corre_matrix.shape[0]):
+        if corre_matrix.iloc[i, j] > 0.8:
+            print(df_norm.columns[j], i, j)
+            if df_norm.columns[j] not in del_list:
+                del_list.append(df_norm.columns[j])
+col_list = list(df.columns)
+for i in del_list:
+    col_list.remove(i)
+df_norm = df_norm[col_list]
+target_list = ["loan_amnt","annual_inc","int_rate","total_rec_int","tot_coll_amt"]
+df_norm["target"] = (df_norm["loan_amnt"]+0.5*df_norm["annual_inc"]).apply(np.log1p)+0.0008*df_norm["loan_amnt"]*df_norm["int_rate"]+np.sqrt(df_norm["total_rec_int"]+df_norm["tot_coll_amt"])
+df_norm["target"] = (normalize(df_norm["target"])>0.4).astype(int)
 #df_norm["target"].value_counts()
 X,y = df.iloc[:,:-1],df.iloc[:,-1]
 X_train,X_test,y_train,y_test = train_test_split(X,y,test_size=0.3,random_state=42)
@@ -166,14 +187,16 @@ def explain(index_num,X_train,X_test,predict_fn,exp_list,target_list,count_list)
     if index_num % 500 ==1:
         with open("result_nonlinear.txt","w") as file:
                 file.writelines(count_list)
-
+    print("count: "+str())
     #print(exp_list[index_num].local_exp[1])
     #print(exp_list)
     print("index_num: "+str(index_num))
 if __name__ == '__main__':
+    n_jobs = 30
     index = 0   #使用index来防止进程先后关系导致解释先后顺序发生颠倒
-    exp_list = []
-    count_list = []
+    manager = Manager()
+    exp_list = manager.list()  # 这里使用multiprocessing中的list来管理,这样就能通过explain函数来改变列表
+    count_list = manager.list()
     for i in range(int(X_train.shape[0]*0.5)):
         exp_list.append(None)
         count_list.append(str(-1))
@@ -185,7 +208,6 @@ if __name__ == '__main__':
         print("已处理 " + str(index) + " 行数据")
         if index ==int(X_test.shape[0]*0.3):
             break
-
     #print(exp_list[0].local_exp[1])
     #下面是提取解释结果来定性评估一下
 
